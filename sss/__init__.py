@@ -13,6 +13,10 @@ MERGE_FIELDS_REQUIRED = [
     'baserepo',
     'patchwork_',
 ]
+BUILD_FIELDS_REQUIRED = [
+    'cfgurl',
+    'buildurl',
+]
 
 
 class MissingAUTH_TOKEN(Exception):
@@ -67,6 +71,15 @@ def get_merge_metadata(data, check_missing_fields=True):
     return _build_new_dict_from(data, MERGE_FIELDS_REQUIRED, check_missing_fields)
 
 
+def get_build_metadata(data, arch, check_missing_fields=True):
+    """Return a dict with the merge fields required in this step"""
+    tmp = _build_new_dict_from(data, BUILD_FIELDS_REQUIRED, check_missing_fields)
+    result = {}
+    for k, v in tmp.items():
+        result['{k}_{arch}'.format(**locals())] = v
+    return result
+
+
 class IniParser(configparser.ConfigParser):
     def as_dict(self):
         d = dict(self._sections)
@@ -89,6 +102,17 @@ def post_merge_info(project, arch, source_id, state, skt_rc_path, metadata):
     do_request(url, test_result, metadata, ())
 
 
+def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
+    """tightly coupled to skt"""
+    url = 'api/submit/KERNELCI/{project}/{source_id}/{arch}'.format(**locals())
+    ini_parser = IniParser()
+    ini_parser.read(skt_rc_path)
+    data = ini_parser.as_dict()['state']
+    metadata.update(get_build_metadata(data, arch, True))
+    test_result = {'/build/': state}
+    do_request(url, test_result, metadata, ())
+
+
 def main():
     parser = argparse.ArgumentParser(description='Push SKT steps to Squad.')
     parser.add_argument('--project', help='Same name that jenkins pipeline', required=True)
@@ -98,7 +122,6 @@ def main():
     parser.add_argument('--skt-rc-path', help='Path to skt rc file', required=True)
     parser.add_argument('--job-id', help='Unique id for the task, maybe jenkins_job+action e.g. 234+merge', required=True)
     parser.add_argument('--build-url', help='URL pointing to the jenkins job', required=True)
-
     parser.add_argument('--action', help='Actions', choices=['merge', 'build', 'test'], required=True)
     args = parser.parse_args()
     metadata = {
@@ -107,3 +130,5 @@ def main():
     }
     if args.action == 'merge':
         post_merge_info(args.project, args.arch, args.source_id, args.state, args.skt_rc_path, metadata)
+    elif args.action == 'build':
+        post_build_info(args.project, args.arch, args.source_id, args.state, args.skt_rc_path, metadata)
