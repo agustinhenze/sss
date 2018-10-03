@@ -85,7 +85,7 @@ def post_merge_info(project, arch, source_id, state, skt_rc_path, metadata):
     ini_parser.read(skt_rc_path)
     data = ini_parser.as_dict()['state']
     metadata.update(get_merge_metadata(data, check_missing_fields))
-    test_result = {'merge': state}
+    test_result = {'/merge/': state}
     do_request(url, test_result, metadata, ())
 
 
