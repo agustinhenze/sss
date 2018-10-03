@@ -46,20 +46,25 @@ def do_request(url, test_result, metadata, files):
     # ToDo: check response
 
 
-def get_merge_metadata(data, check_missing_fields=True):
-    """Return a dict with the merge fields required in this step"""
+def _build_new_dict_from(data, expected_keys, check_missing_fields):
+    """Return a dict with the keys listed on expected_keys"""
     result = {}
-    for expected_field in MERGE_FIELDS_REQUIRED:
+    for expected_key in expected_keys:
         for field in data:
-            if field.startswith(expected_field):
+            if field.startswith(expected_key):
                 break
         else:
             if check_missing_fields:
-                raise MissingField(expected_field)
+                raise MissingField(expected_key)
             else:
                 continue
         result[field] = data[field]
     return result
+
+
+def get_merge_metadata(data, check_missing_fields=True):
+    """Return a dict with the merge fields required in this step"""
+    return _build_new_dict_from(data, MERGE_FIELDS_REQUIRED, check_missing_fields)
 
 
 class IniParser(configparser.ConfigParser):
