@@ -1,6 +1,7 @@
 import os
 import argparse
 import json
+import logging
 try:
     import ConfigParser as configparser
 except ImportError:
@@ -46,6 +47,7 @@ def do_request(url, test_result, metadata, files):
         'metadata': json.dumps(metadata),
     }
     url = '{SQUAD_HOST}/{url}'.format(SQUAD_HOST=SQUAD_HOST, url=url)
+    logging.debug('Posting the following payload\n%r', data)
     response = requests.post(url, headers=headers, data=data, files=files)
     # ToDo: check response
 
@@ -114,6 +116,8 @@ def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
 
 
 def main():
+    logging.basicConfig(format="%(created)10.6f:%(levelname)s:%(message)s")
+    logging.getLogger().setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
     parser = argparse.ArgumentParser(description='Push SKT steps to Squad.')
     parser.add_argument('--project', help='Same name that jenkins pipeline', required=True)
     parser.add_argument('--source-id', help='Githash plus patchids appendend by a _ or something similar', required=True)
