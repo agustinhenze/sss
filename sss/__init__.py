@@ -1,9 +1,11 @@
+from __future__ import division
 import os
 import argparse
 import json
 import logging
 import tempfile
 import shutil
+from datetime import datetime
 try:
     import ConfigParser as configparser
 except ImportError:
@@ -343,8 +345,10 @@ def process_build(job_name, build, build_info, sections, db):
             fh.flush()
 
             source_id = _build_source_id(fh.name)
+            build_date = datetime.fromtimestamp(build_info['timestamp']/1000)
             metadata = {
                 'build_url': build_info['url'],
+                'datetime': build_date.isoformat(),
             }
 
             metadata['job_id'] = '{}-{}-{}'.format(build_info['id'],
