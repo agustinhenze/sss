@@ -60,7 +60,6 @@ def get_varenv_or_raise(name, exception):
 
 
 def do_request(url, test_result, metadata, files=None, metrics=None):
-    logging.info('Doing request to SQUAD')
     files = files or ()
     metrics = metrics or {}
     AUTH_TOKEN = get_varenv_or_raise('AUTH_TOKEN', MissingAUTH_TOKEN)
@@ -356,6 +355,7 @@ def process_build(job_name, build, build_info, sections, db):
                                                    'merge')
             merge_status = merge_fail_status.get(data_parsed['status'], 'pass')
             if not db.get(metadata['job_id']):
+                logging.info('Post step %s', metadata['job_id'])
                 post_merge_info(job_name, data_parsed['arch'], source_id,
                                 merge_status, fh.name, metadata)
             sss_save_state(db, metadata['job_id'])
@@ -367,19 +367,21 @@ def process_build(job_name, build, build_info, sections, db):
                                                    'build')
             build_status = build_fail_status.get(data_parsed['status'], 'pass')
             if not db.get(metadata['job_id']):
+                logging.info('Post step %s', metadata['job_id'])
                 post_build_info(job_name, data_parsed['arch'], source_id,
                                 build_status, fh.name, metadata)
             sss_save_state(db, metadata['job_id'])
             if build_status == 'fail':
                 continue
 
-            metadata['job_id'] = '{}-{}-{}'.format(build_info['id'],
-                                                   data_parsed['arch'],
-                                                   'test')
-            if not db.get(metadata['job_id']):
+            job_id = '{}-{}-{}'.format(build_info['id'],
+                                       data_parsed['arch'],
+                                       'test')
+            if not db.get(job_id):
+                logging.info('Post step %s', job_id)
                 post_test_info(job_name, data_parsed['arch'], source_id,
                                fh.name, metadata)
-            sss_save_state(db, metadata['job_id'])
+            sss_save_state(db, job_id)
 
 
 def process_jenkins_jobs():
