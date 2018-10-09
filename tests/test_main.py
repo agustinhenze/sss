@@ -96,3 +96,19 @@ class TestMain(unittest.TestCase):
                 'baserepo': 'http://git.host.prod.eng.bos.redhat.com/git/rhel7.git',
             }
             self.assertDictEqual(metadata_expected, metadata)
+
+    def test_post_build_info(self):
+        with mock.patch('sss.do_request') as mock_do_request:
+            sss.post_build_info('prj', 'arm', 'e96d38e6e7', 'pass',
+                                get_asset_path('skt_rc_0'), {})
+            url, test_result, metadata = mock_do_request.mock_calls[0][1]
+            self.assertEqual('api/submit/KERNELCI/prj/e96d38e6e7/arm', url)
+            self.assertDictEqual({'/build/': 'pass'}, test_result)
+            metadata_expected = {
+                'patchwork_00': 'http://patchwork.usersys.redhat.com/patch/229746',
+                'basehead': 'e96d38e6e7ae0ee35656fc86a0668434648bb8e3',
+                'baserepo': 'http://git.host.prod.eng.bos.redhat.com/git/rhel7.git',
+                'buildlog_arm': '/home/worker/runner/workspace/rhel7-multiarch@3/ppc64le/workdir/build.log',
+                'cfgurl_arm': 'http://xci33.lab.eng.rdu2.redhat.com/builds/ppc64le/ef7cec3e560720ddd2fde2bf824761087c025a32.csv.config',
+            }
+            self.assertDictEqual(metadata_expected, metadata)
