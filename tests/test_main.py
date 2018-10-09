@@ -1,6 +1,17 @@
 import unittest
+import os
 import sss
 
+
+def get_asset_path(filename):
+    current_dir = os.path.realpath(os.path.dirname(__file__))
+    return os.path.join(current_dir, 'assets', filename)
+
+
+def get_asset_content(filename):
+    asset_path = get_asset_path(filename)
+    with open(asset_path) as fh:
+        return fh.read()
 
 
 class TestMain(unittest.TestCase):
@@ -66,3 +77,7 @@ class TestMain(unittest.TestCase):
             {"cfgurl_x86_64": "url"},
             result,
         )
+
+    def test_read_skt_rc_state(self):
+        rc_state = sss.read_skt_rc_state(get_asset_path('skt_rc_0'))
+        self.assertEqual(rc_state['kernel_arch'], 'powerpc')
