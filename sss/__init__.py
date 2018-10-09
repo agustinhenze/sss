@@ -39,7 +39,10 @@ def get_varenv_or_raise(name, exception):
     return varenv
 
 
-def do_request(url, test_result, metadata, files):
+def do_request(url, test_result, metadata, files=None, metrics=None):
+    logging.info('Doing request to SQUAD')
+    files = files or ()
+    metrics = metrics or {}
     AUTH_TOKEN = get_varenv_or_raise('AUTH_TOKEN', MissingAUTH_TOKEN)
     SQUAD_HOST = get_varenv_or_raise('SQUAD_HOST', MissingSQUAD_HOST)
     headers = {
@@ -48,11 +51,16 @@ def do_request(url, test_result, metadata, files):
     data = {
         'tests': json.dumps(test_result),
         'metadata': json.dumps(metadata),
+        'metrics': json.dumps(metrics),
     }
-    url = '{SQUAD_HOST}/{url}'.format(SQUAD_HOST=SQUAD_HOST, url=url)
-    logging.debug('Posting the following payload\n%r', data)
-    response = requests.post(url, headers=headers, data=data, files=files)
-    # ToDo: check response
+    attachments = []
+    for file in files:
+        attachments.append(('attachment', file))
+    full_url = '{SQUAD_HOST}/{url}'.format(SQUAD_HOST=SQUAD_HOST, url=url)
+    logging.debug('Posting the following payload\ndata:\t%r\nfiles:\t%r',
+                  data, attachments)
+    response = requests.post(full_url, headers=headers, data=data, files=attachments)
+    response.raise_for_status()
 
 
 def _build_new_dict_from(data, expected_keys, check_missing_fields):
