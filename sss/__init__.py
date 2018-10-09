@@ -123,6 +123,7 @@ def get_build_metadata(data, arch, check_missing_fields=True):
 
 
 class IniParser(configparser.ConfigParser):
+    """A ConfigParser subclass with an extra method to get the data as dict"""
     def as_dict(self):
         d = dict(self._sections)
         for k in d:
