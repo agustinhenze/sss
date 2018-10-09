@@ -79,6 +79,9 @@ def do_request(url, test_result, metadata, files=None, metrics=None):
     logging.debug('Posting the following payload\ndata:\t%r\nfiles:\t%r',
                   data, attachments)
     response = requests.post(full_url, headers=headers, data=data, files=attachments)
+    if 'There is already a test run with' in response.content:
+        logging.warning(response.content)
+        return
     response.raise_for_status()
 
 
