@@ -123,7 +123,7 @@ def post_merge_info(project, arch, source_id, state, skt_rc_path, metadata):
     data = read_skt_rc_data(skt_rc_path)
     metadata.update(get_merge_metadata(data, check_missing_fields))
     test_result = {'/merge/': state}
-    do_request(url, test_result, metadata, ())
+    do_request(url, test_result, metadata)
 
 
 def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
