@@ -131,7 +131,8 @@ class IniParser(configparser.ConfigParser):
         return d
 
 
-def read_skt_rc_data(skt_rc_path):
+def read_skt_rc_state(skt_rc_path):
+    """Get the skt state section as dict"""
     ini_parser = IniParser()
     ini_parser.read(skt_rc_path)
     return ini_parser.as_dict()['state']
@@ -142,7 +143,7 @@ def post_merge_info(project, arch, source_id, state, skt_rc_path, metadata):
     # group name KERNELCI hardcoded for now
     url = 'api/submit/KERNELCI/{project}/{source_id}/{arch}'.format(**locals())
     check_missing_fields = True if state.lower() == 'skip' else False
-    data = read_skt_rc_data(skt_rc_path)
+    data = read_skt_rc_state(skt_rc_path)
     metadata.update(get_merge_metadata(data, check_missing_fields))
     test_result = {'/merge/': state}
     do_request(url, test_result, metadata)
@@ -151,7 +152,7 @@ def post_merge_info(project, arch, source_id, state, skt_rc_path, metadata):
 def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
     """tightly coupled to skt"""
     url = 'api/submit/KERNELCI/{project}/{source_id}/{arch}'.format(**locals())
-    data = read_skt_rc_data(skt_rc_path)
+    data = read_skt_rc_state(skt_rc_path)
     metadata.update(get_merge_metadata(data, False))
     metadata.update(get_build_metadata(data, arch, True))
     test_result = {'/build/': state}
@@ -239,7 +240,7 @@ def post_task(beaker_host, url_squad, task, metadata, beaker_result):
 
 def post_test_info(project, arch, source_id, skt_rc_path, metadata):
     beaker_host = 'https://beaker.engineering.redhat.com'
-    data = read_skt_rc_data(skt_rc_path)
+    data = read_skt_rc_state(skt_rc_path)
     recipeset = data['recipesetid_0'].split(':')[1]
     url = '{beaker_host}/recipesets/{recipeset}'.format(**locals())
     response = requests.get(url)
@@ -305,7 +306,7 @@ def parse_section(section):
 
 
 def _build_source_id(skt_rc_path):
-    skt_rc = read_skt_rc_data(skt_rc_path)
+    skt_rc = read_skt_rc_state(skt_rc_path)
     source_id = skt_rc['basehead'][:8]
     for k, v in skt_rc.items():
         if k.startswith('patchwork'):
