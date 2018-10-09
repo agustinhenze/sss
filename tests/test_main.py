@@ -14,7 +14,7 @@ class TestMain(unittest.TestCase):
             'foo': 'bar'
         }
         result = sss.get_merge_metadata(data)
-        self.assertEqual(
+        self.assertDictEqual(
             {"basehead": "githash", "baserepo": "url", "patchwork_00": "url"},
             result,
         )
@@ -25,7 +25,7 @@ class TestMain(unittest.TestCase):
             'foo': 'bar'
         }
         result = sss.get_merge_metadata(data, check_missing_fields=False)
-        self.assertEqual(
+        self.assertDictEqual(
             {"basehead": "githash", "baserepo": "url"},
             result,
         )
