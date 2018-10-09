@@ -1,5 +1,6 @@
 import unittest
 import os
+import mock
 import sss
 
 
@@ -81,3 +82,17 @@ class TestMain(unittest.TestCase):
     def test_read_skt_rc_state(self):
         rc_state = sss.read_skt_rc_state(get_asset_path('skt_rc_0'))
         self.assertEqual(rc_state['kernel_arch'], 'powerpc')
+
+    def test_post_merge_info(self):
+        with mock.patch('sss.do_request') as mock_do_request:
+            sss.post_merge_info('prj', 'arm', 'e96d38e6e7', 'fail',
+                                get_asset_path('skt_rc_0'), {})
+            url, test_result, metadata = mock_do_request.mock_calls[0][1]
+            self.assertEqual('api/submit/KERNELCI/prj/e96d38e6e7/arm', url)
+            self.assertDictEqual({'/merge/': 'fail'}, test_result)
+            metadata_expected = {
+                'patchwork_00': 'http://patchwork.usersys.redhat.com/patch/229746',
+                'basehead': 'e96d38e6e7ae0ee35656fc86a0668434648bb8e3',
+                'baserepo': 'http://git.host.prod.eng.bos.redhat.com/git/rhel7.git',
+            }
+            self.assertDictEqual(metadata_expected, metadata)
