@@ -395,7 +395,10 @@ def process_jenkins_jobs():
     except ImportError:
         raise Exception('Missing config.py')
     for job_name in config.JOB_NAMES_TRACKED:
-        for build in server.get_job_info(job_name)['builds']:
+        job_info = server.get_job_info(job_name,
+                                       fetch_all_builds=args.all_builds)
+        builds = sorted(job_info['builds'], key=lambda x: x['number'])
+        for build in builds:
             build_info = server.get_build_info(job_name, build['number'])
             if build_info['building'] or build_info['result'] == 'ABORTED':
                 # Not processing pipelines unfinished neither aborted
