@@ -385,6 +385,17 @@ def process_build(job_name, build, build_info, sections, db):
 def process_jenkins_jobs():
     logging.basicConfig(format="%(created)10.6f:%(levelname)s: %(message)s")
     logging.getLogger().setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+    parser = argparse.ArgumentParser(
+        description='Fetch jenkins jobs then parse and push them to Squad.'
+    )
+    parser.add_argument(
+        '--all-builds',
+        help='If passed, all builds will be retrieved from Jenkins. Otherwise,'
+        ' Jenkins will only return the most recent 100 builds per job name',
+        action='store_true',
+    )
+    args = parser.parse_args()
+
     host = get_varenv_or_raise('JENKINS_HOST', MissingJENKINS_HOST)
     username = get_varenv_or_raise('JENKINS_USERNAME', MissingJENKINS_USERNAME)
     password = get_varenv_or_raise('JENKINS_PASSWORD', MissingJENKINS_PASSWORD)
