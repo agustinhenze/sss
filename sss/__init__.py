@@ -32,13 +32,16 @@ class MissingField(Exception):
     """Exception raised when a field is missing into the data to be send"""
 
 
+def get_varenv_or_raise(name, exception):
+    varenv = os.getenv(name)
+    if not varenv:
+        raise exception
+    return varenv
+
+
 def do_request(url, test_result, metadata, files):
-    AUTH_TOKEN = os.getenv('AUTH_TOKEN')
-    SQUAD_HOST = os.getenv('SQUAD_HOST')
-    if not AUTH_TOKEN:
-        raise MissingAUTH_TOKEN
-    if not SQUAD_HOST:
-        raise MissingSQUAD_HOST
+    AUTH_TOKEN = get_varenv_or_raise('AUTH_TOKEN', MissingAUTH_TOKEN)
+    SQUAD_HOST = get_varenv_or_raise('SQUAD_HOST', MissingSQUAD_HOST)
     headers = {
         "Auth-Token": AUTH_TOKEN,
     }
