@@ -2,11 +2,15 @@ import os
 import argparse
 import json
 import logging
+import tempfile
+import shutil
 try:
     import ConfigParser as configparser
 except ImportError:
     import configparser
 import requests
+import dateutil.parser
+import xmltodict
 
 
 MERGE_FIELDS_REQUIRED = [
@@ -133,7 +137,103 @@ def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
     metadata.update(get_merge_metadata(data, False))
     metadata.update(get_build_metadata(data, arch, True))
     test_result = {'/build/': state}
-    do_request(url, test_result, metadata, ())
+    do_request(url, test_result, metadata)
+
+
+def _fetch_log(name, url, tmpdir):
+    filepath = os.path.join(tmpdir, name)
+    with open(filepath, 'wb') as fh:
+        response = requests.get(url)
+        fh.write(response.content)
+    return filepath
+
+
+def _get_log_files(task_logs, beaker_host, tmpdir):
+    files = []
+    for log in task_logs:
+        url = '{}/{}'.format(beaker_host, log['href'])
+        filepath = _fetch_log(log['path'], url, tmpdir)
+        files.append(open(filepath, 'rb'))
+    return files
+
+
+def get_log_by_task(task, task_name):
+    if 'logs' not in task:
+        return {}
+    test_name = task['@path']
+    if task_name not in task['@path']:
+        test_name = '{}/{}'.format(task_name, task['@path'])
+    result = {
+        'name': test_name,
+        'result': task['@result'],
+        'id': task['@id'],
+        'url_log': task['logs']['log']['@href'],
+    }
+    return result
+
+
+def get_test_results(beaker_host, recipe_id):
+    response = requests.get('{beaker_host}/recipes/{recipe_id}.xml'.format(**locals()))
+    result = xmltodict.parse(response.content)
+    tests = []
+    for task in result['job']['recipeSet']['recipe']['task']:
+        if not task['@name'].startswith('/kernel'):
+            continue
+        task_name, subtasks = task['@name'], task['results']
+        if type(subtasks['result']) == list:
+            for subtask in subtasks['result']:
+                test = get_log_by_task(subtask, task_name)
+                if test:
+                    tests.append(test)
+        else:
+            test = get_log_by_task(subtasks['result'], task_name)
+            if test:
+                tests.append(test)
+    return tests
+
+
+def post_task(beaker_host, url_squad, task, metadata, beaker_result):
+    task_name = task['name']
+    test_result = {}
+    tmpdir = tempfile.mkdtemp()
+    files = _get_log_files(task['logs'], beaker_host, tmpdir)
+    # job_id must be unique, so it's better using beaker ids
+    metadata['job_id'] = str(task['id'])
+    finish_time = dateutil.parser.parse(task['finish_time'])
+    start_time = dateutil.parser.parse(task['start_time'])
+    duration = finish_time - start_time
+    metrics = {
+        task_name + '/duration': duration.seconds,
+    }
+    for test in beaker_result:
+        if task_name not in test['name']:
+            continue
+        subtask_name = test['name'].split(task_name)[1]
+        subtask_name = '-'.join(subtask_name.lstrip('/').split('/'))
+        subtask_name = subtask_name or os.path.basename(test['name'])
+        filepath = _fetch_log(subtask_name + '.log', test['url_log'], tmpdir)
+        files.append(open(filepath, 'rb'))
+        subtask_fullname = task_name + '/' + subtask_name
+        test_result[subtask_fullname] = test['result']
+    do_request(url_squad, test_result, metadata, files, metrics)
+    shutil.rmtree(tmpdir)
+
+
+def post_test_info(project, arch, source_id, skt_rc_path, metadata):
+    beaker_host = 'https://beaker.engineering.redhat.com'
+    data = read_skt_rc_data(skt_rc_path)
+    recipeset = data['recipesetid_0'].split(':')[1]
+    url = '{beaker_host}/recipesets/{recipeset}'.format(**locals())
+    response = requests.get(url)
+    result = response.json()
+    url_squad = 'api/submit/KERNELCI/{project}/{source_id}/{arch}'.format(**locals())
+    metadata.update(get_merge_metadata(data, False))
+    metadata.update(get_build_metadata(data, arch, True))
+    recipe_id = result['machine_recipes'][0]['recipe_id']
+    beaker_result = get_test_results(beaker_host, recipe_id)
+    for task in result['machine_recipes'][0]['tasks']:
+        if task['name'].startswith('/kernel'):
+            post_task(beaker_host, url_squad, task, metadata, beaker_result)
 
 
 def main():
@@ -157,3 +257,5 @@ def main():
         post_merge_info(args.project, args.arch, args.source_id, args.state, args.skt_rc_path, metadata)
     elif args.action == 'build':
         post_build_info(args.project, args.arch, args.source_id, args.state, args.skt_rc_path, metadata)
+    elif args.action == 'test':
+        post_test_info(args.project, args.arch, args.source_id, args.skt_rc_path, metadata)
