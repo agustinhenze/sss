@@ -11,6 +11,8 @@ except ImportError:
 import requests
 import dateutil.parser
 import xmltodict
+import jenkins
+import pickledb
 
 
 MERGE_FIELDS_REQUIRED = [
@@ -30,6 +32,18 @@ class MissingAUTH_TOKEN(Exception):
 
 class MissingSQUAD_HOST(Exception):
     """Exception raised when the varenv SQUAD_HOST is missing"""
+
+
+class MissingJENKINS_HOST(Exception):
+    """Exception raised when the varenv JENKINS_HOST is missing"""
+
+
+class MissingJENKINS_USERNAME(Exception):
+    """Exception raised when the varenv JENKINS_USERNAME is missing"""
+
+
+class MissingJENKINS_PASSWORD(Exception):
+    """Exception raised when the varenv JENKINS_PASSWORD is missing"""
 
 
 class MissingField(Exception):
@@ -234,6 +248,164 @@ def post_test_info(project, arch, source_id, skt_rc_path, metadata):
     for task in result['machine_recipes'][0]['tasks']:
         if task['name'].startswith('/kernel'):
             post_task(beaker_host, url_squad, task, metadata, beaker_result)
+
+
+def get_sections(console_text):
+    sections = {}
+    inside_section = False
+    for line in console_text.splitlines():
+        if line.startswith('BUILD STATE'):
+            inside_section = True
+            name = ' '.join(line.split()[3:])
+            continue
+        if line.startswith('[Pipeline] stage'):
+            inside_section = False
+        if inside_section:
+            sections.setdefault(name, []).append(line)
+    return sections
+
+
+def parse_section(section):
+    result = []
+    next_line_arch = False
+    payload = False
+    content = []
+    d = {}
+    for line in section:
+        if line.endswith('echo'):
+            next_line_arch = True
+            continue
+        if next_line_arch:
+           next_line_arch = False
+           d['arch'] = line.strip(':')
+           payload = True
+           continue
+        if payload and not line:
+            payload = False
+            if d and len(content) > 1:
+                d['skt_rc'] = '\n'.join(content)
+                result.append(d)
+            d = {}
+            content = []
+            continue
+        if payload:
+            if 'configuration' in line:
+                content = ['',]
+                continue
+            if content:
+                content.append(line.strip())
+            else:
+                line_split = line.split(':')
+                d[line_split[0].strip()] = line_split[1].strip()
+    return result
+
+
+def _build_source_id(skt_rc_path):
+    skt_rc = read_skt_rc_data(skt_rc_path)
+    source_id = skt_rc['basehead'][:8]
+    for k, v in skt_rc.items():
+        if k.startswith('patchwork'):
+            source_id += '.patch.{}'.format(os.path.basename(v))
+            break
+    return source_id
+
+
+def sss_save_state(db, job_id):
+    db.set(job_id, True)
+    db.dump()
+
+
+def process_build(job_name, build, build_info, sections, db):
+    status_map = {
+        'Created': 'Patching fail',
+        'Merged': 'Building fail',
+        'Built': 'Testing fail weirdly',
+        'Tested': 'Testing fail',
+        'Passed': 'OK',
+    }
+    merge_fail_status = {
+        'Created': 'fail',
+    }
+    build_fail_status = {
+        'Created': 'fail',
+        'Merged': 'fail',
+        'Built': 'fail',
+    }
+    for data_parsed in parse_section(sections['TESTING']):
+        logging.info(
+            'Parsing %s with status %s for arch %s',
+            build['url'],
+            status_map[data_parsed['status']],
+            data_parsed['arch']
+        )
+        with tempfile.NamedTemporaryFile() as fh:
+            fh.write(data_parsed['skt_rc'].encode('utf-8'))
+            fh.flush()
+
+            source_id = _build_source_id(fh.name)
+            metadata = {
+                'build_url': build_info['url'],
+            }
+
+            metadata['job_id'] = '{}-{}-{}'.format(build_info['id'],
+                                                   data_parsed['arch'],
+                                                   'merge')
+            merge_status = merge_fail_status.get(data_parsed['status'], 'pass')
+            if not db.get(metadata['job_id']):
+                post_merge_info(job_name, data_parsed['arch'], source_id,
+                                merge_status, fh.name, metadata)
+            sss_save_state(db, metadata['job_id'])
+            if merge_status == 'fail':
+                continue
+
+            metadata['job_id'] = '{}-{}-{}'.format(build_info['id'],
+                                                   data_parsed['arch'],
+                                                   'build')
+            build_status = build_fail_status.get(data_parsed['status'], 'pass')
+            if not db.get(metadata['job_id']):
+                post_build_info(job_name, data_parsed['arch'], source_id,
+                                build_status, fh.name, metadata)
+            sss_save_state(db, metadata['job_id'])
+            if build_status == 'fail':
+                continue
+
+            metadata['job_id'] = '{}-{}-{}'.format(build_info['id'],
+                                                   data_parsed['arch'],
+                                                   'test')
+            if not db.get(metadata['job_id']):
+                post_test_info(job_name, data_parsed['arch'], source_id,
+                               fh.name, metadata)
+            sss_save_state(db, metadata['job_id'])
+
+
+def process_jenkins_jobs():
+    logging.basicConfig(format="%(created)10.6f:%(levelname)s: %(message)s")
+    logging.getLogger().setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
+    host = get_varenv_or_raise('JENKINS_HOST', MissingJENKINS_HOST)
+    username = get_varenv_or_raise('JENKINS_USERNAME', MissingJENKINS_USERNAME)
+    password = get_varenv_or_raise('JENKINS_PASSWORD', MissingJENKINS_PASSWORD)
+    server = jenkins.Jenkins(host, username=username, password=password)
+    db = pickledb.load('sss_cache.db', False)
+    try:
+        import config
+    except ImportError:
+        raise Exception('Missing config.py')
+    for job_name in config.JOB_NAMES_TRACKED:
+        for build in server.get_job_info(job_name)['builds']:
+            build_info = server.get_build_info(job_name, build['number'])
+            if build_info['building'] or build_info['result'] == 'ABORTED':
+                # Not processing pipelines unfinished neither aborted
+                continue
+            url = '{}/consoleText'.format(build['url'])
+            response = requests.get(url)
+            console_text = response.content
+            sections = get_sections(console_text)
+            if not sections or len(sections) != 3:
+                # Discard broken pipelines
+                logging.warning('Broken pipeline\n%r', console_text)
+                continue
+
+            process_build(job_name, build, build_info, sections, db)
 
 
 def main():
