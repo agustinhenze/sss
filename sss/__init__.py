@@ -427,7 +427,10 @@ def process_jenkins_jobs():
             sections = get_sections(console_text)
             if not sections or len(sections) != 3:
                 # Discard broken pipelines
-                logging.warning('Broken pipeline\n%r', console_text)
+                job_id_broken = '{}-{}'.format(job_name, build_info['job_id'])
+                if not db.get(job_id_broken):
+                    logging.warning('Broken pipeline\n%r', console_text)
+                    sss_save_state(db, job_id_broken)
                 continue
 
             process_build(job_name, build, build_info, sections, db)
