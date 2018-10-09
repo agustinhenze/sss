@@ -16,7 +16,7 @@ MERGE_FIELDS_REQUIRED = [
 ]
 BUILD_FIELDS_REQUIRED = [
     'cfgurl',
-    'buildurl',
+    'buildurl|buildlog',
 ]
 
 
@@ -63,12 +63,19 @@ def do_request(url, test_result, metadata, files=None, metrics=None):
     response.raise_for_status()
 
 
+def _is_field_required(field, expected_key):
+    for key in expected_key.split('|'):
+        if field.startswith(key):
+            return True
+    return False
+
+
 def _build_new_dict_from(data, expected_keys, check_missing_fields):
     """Return a dict with the keys listed on expected_keys"""
     result = {}
     for expected_key in expected_keys:
         for field in data:
-            if field.startswith(expected_key):
+            if _is_field_required(field, expected_key):
                 break
         else:
             if check_missing_fields:
