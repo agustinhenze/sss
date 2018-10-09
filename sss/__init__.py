@@ -219,12 +219,15 @@ def post_task(beaker_host, url_squad, task, metadata, beaker_result):
     files = _get_log_files(task['logs'], beaker_host, tmpdir)
     # job_id must be unique, so it's better using beaker ids
     metadata['job_id'] = str(task['id'])
-    finish_time = dateutil.parser.parse(task['finish_time'])
-    start_time = dateutil.parser.parse(task['start_time'])
-    duration = finish_time - start_time
-    metrics = {
-        task_name + '/duration': duration.seconds,
-    }
+    if task['status'] == 'Completed':
+        finish_time = dateutil.parser.parse(task['finish_time'])
+        start_time = dateutil.parser.parse(task['start_time'])
+        duration = finish_time - start_time
+        metrics = {
+            task_name + '/duration': duration.seconds,
+        }
+    else:
+        metrics = {}
     for test in beaker_result:
         if task_name not in test['name']:
             continue
