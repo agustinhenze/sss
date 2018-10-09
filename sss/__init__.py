@@ -130,6 +130,7 @@ def post_build_info(project, arch, source_id, state, skt_rc_path, metadata):
     """tightly coupled to skt"""
     url = 'api/submit/KERNELCI/{project}/{source_id}/{arch}'.format(**locals())
     data = read_skt_rc_data(skt_rc_path)
+    metadata.update(get_merge_metadata(data, False))
     metadata.update(get_build_metadata(data, arch, True))
     test_result = {'/build/': state}
     do_request(url, test_result, metadata, ())
