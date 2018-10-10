@@ -218,7 +218,8 @@ def post_task(beaker_host, url_squad, task, metadata, beaker_result):
     tmpdir = tempfile.mkdtemp()
     files = _get_log_files(task['logs'], beaker_host, tmpdir)
     # job_id must be unique, so it's better using beaker ids
-    metadata['job_id'] = str(task['id'])
+    metadata['job_id'] = '{}-{}'.format(task['id'],
+                                        task_name.strip('/').replace('/', '-'))
     if task['status'] == 'Completed':
         finish_time = dateutil.parser.parse(task['finish_time'])
         start_time = dateutil.parser.parse(task['start_time'])
