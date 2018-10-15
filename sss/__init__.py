@@ -277,20 +277,15 @@ def get_sections(console_text):
 
 def parse_section(section):
     result = []
-    next_line_arch = False
     payload = False
     content = []
     d = {}
     for line in section:
-        if line.endswith('echo'):
-            next_line_arch = True
-            continue
-        if next_line_arch:
-           next_line_arch = False
+        if line.strip() in ['aarch64:', 'ppc64le:', 'x86_64:', 'ppc64:']:
            d['arch'] = line.strip(':')
            payload = True
            continue
-        if payload and not line:
+        if payload and line.startswith('[Pipeline]'):
             payload = False
             if d and len(content) > 1:
                 d['skt_rc'] = '\n'.join(content)
