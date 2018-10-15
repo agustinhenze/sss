@@ -425,19 +425,21 @@ def process_jenkins_jobs():
             if build_info['building'] or build_info['result'] == 'ABORTED':
                 # Not processing pipelines unfinished neither aborted
                 continue
+            job_id = '{}-{}'.format(job_name, build_info['id'])
+            if db.get(job_id):
+                continue
             url = '{}/consoleText'.format(build['url'])
             response = requests.get(url)
             console_text = response.content
             sections = get_sections(console_text)
             if not sections or len(sections) != 3:
                 # Discard broken pipelines
-                job_id_broken = '{}-{}'.format(job_name, build_info['id'])
-                if not db.get(job_id_broken):
-                    logging.warning('Broken pipeline\n%r', console_text)
-                    sss_save_state(db, job_id_broken)
+                logging.warning('Broken pipeline\n%r', console_text)
+                sss_save_state(db, job_id)
                 continue
 
             process_build(job_name, build, build_info, sections, db)
+            sss_save_state(db, job_id)
 
 
 def main():
