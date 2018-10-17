@@ -196,8 +196,11 @@ def get_test_results(beaker_host, recipe_id):
     response = requests.get('{beaker_host}/recipes/{recipe_id}.xml'.format(**locals()))
     result = xmltodict.parse(response.content)
     tests = []
+    after_distribution_kpkginstall = False
     for task in result['job']['recipeSet']['recipe']['task']:
-        if not task['@name'].startswith('/kernel'):
+        if not after_distribution_kpkginstall:
+            if task['@name'] == '/distribution/kpkginstall':
+                after_distribution_kpkginstall = True
             continue
         task_name, subtasks = task['@name'], task['results']
         if type(subtasks['result']) == list:
